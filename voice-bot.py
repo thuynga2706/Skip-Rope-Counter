@@ -12,7 +12,13 @@ def speak():
     with open('counter.txt') as f:
         global prev_value
         line_ = f.readlines()
-        if line_[0] != prev_value and line_[0] != "0":
+        if line_[0] != prev_value and line_[0] == "START":
+            engine.say("Let's start")
+            engine.runAndWait()
+        elif line_[0] != prev_value and line_[0] == "FINISH":
+            engine.say("Congratulations, you are fabulous!")
+            engine.runAndWait()
+        elif line_[0] != prev_value and line_[0] != "0":
             engine.say("You skipped" + line_[0]+ "times")
             engine.runAndWait()
         prev_value  = line_[0]

@@ -26,22 +26,27 @@ def counter_to_txt(Counter):
         f.write(str(Counter))
 #Initialization
 COUNTER = 0
-STAGE = "down"
+TOTAL_COUNTER = 0
+STATE = "Rest"
 TIME_ELAPSED = 0
 PREV_COORDINATE=0
 DIFF = 0.02
+START_LIST = []
 #Circles & Texts
 CIRCLE_COLOR = (189, 158, 255)#I love pink, especially pastel pink
 CENTER1 = (50, 50) #Counter
-CENTER2 = (150, 50) #Stage
-CENTER3 = (250, 50) #Duration
+CENTER2 = (50, 150) #STATE
+CENTER3 = (50, 250) #Duration
+CENTER4 = (50, 350) #Total_Counter
 HEADER1 = [(20,30),"Counter"]
-HEADER2 = [(130,30),"State"]
-HEADER3 = [(216,30),"Duration"]
+HEADER2 = [(26,130),"State"]
+HEADER3 = [(20,230),"Duration"]
+HEADER4 = [(28,330),"Total"]
 
 TEXT_SCALE = 1
 TEXT_FACE = cv2.FONT_HERSHEY_DUPLEX
 TEXT_THICKNESS = 1
+
 ## Setup mediapipe instance
 mp_drawing = mp.solutions.drawing_utils
 mp_pose = mp.solutions.pose
@@ -68,24 +73,52 @@ with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as 
             # Get coordinates of left shoulder, it can be any point on body
             shoulder = [landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x,landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
             visibility = landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].visibility
-            if visibility>0.6:
-                # Visualize
-                cv2.putText(image, str(round(shoulder[1],3)), 
-                                tuple(np.multiply(shoulder, [640, 480]).astype(int)), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2, cv2.LINE_AA)
-                # Skipping rope Counter Logic   
-                if shoulder[1]< PREV_COORDINATE-DIFF and STAGE == "down":
-                    STAGE = "up"
-                    print("up")          
-                if shoulder[1]> PREV_COORDINATE+DIFF and STAGE == "up":
-                    STAGE = "down"
-                    COUNTER +=1
-                    print("down")
-                    if COUNTER % 10 == 0:
-                        #write Counter to txt
-                        counter_to_txt(COUNTER)
-                        # say sth
-                PREV_COORDINATE = shoulder[1]  
+
+            if STATE == "Rest" or STATE == "Finish": # User hasn't started the exercise
+                COUNTER = 0
+                right_hand_y = landmarks[mp_pose.PoseLandmark.RIGHT_WRIST.value].y
+                right_eye_y = landmarks[mp_pose.PoseLandmark.RIGHT_EYE.value].y
+                START_LIST.append(right_hand_y-right_eye_y)
+                if len(START_LIST)>50 and all(i < 0 for i in START_LIST[-40:]):
+                    STATE = "down"
+                    START_LIST.clear()
+                    counter_to_txt("START")
+
+            if STATE == "up" or STATE == "down" :
+                left_hand_y = landmarks[mp_pose.PoseLandmark.LEFT_WRIST.value].y
+                left_eye_y = landmarks[mp_pose.PoseLandmark.LEFT_EYE.value].y
+                START_LIST.append(left_hand_y-left_eye_y)
+                if len(START_LIST)>50 and all(i < 0 for i in START_LIST[-40:]):
+                    STATE = "Finish"
+                    START_LIST.clear()
+                    counter_to_txt("FINISH")
+                    try:
+                        info = [datetime.now().strftime("%Y/%m/%d %H:%M:%S"),COUNTER,round(TIME_ELAPSED),round(COUNTER/(TIME_ELAPSED/60))]
+                        with open('tracking-progress.csv', mode='a',newline='') as f:
+                            writer = csv.writer(f)
+                            writer.writerow(info)
+                    except:
+                        pass
+
+                if visibility>0.6:
+                    # Visualize
+                    cv2.putText(image, str(round(shoulder[1],3)), 
+                                    tuple(np.multiply(shoulder, [640, 480]).astype(int)), 
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2, cv2.LINE_AA)
+                    # Skipping rope Counter Logic   
+                    if shoulder[1]< PREV_COORDINATE-DIFF and STATE == "down":
+                        STATE = "up"
+                        print("up")          
+                    if shoulder[1]> PREV_COORDINATE+DIFF and STATE == "up":
+                        STATE = "down"
+                        COUNTER +=1
+                        TOTAL_COUNTER +=1
+                        print("down")
+                        if COUNTER % 10 == 0:
+                            #write Counter to txt
+                            counter_to_txt(COUNTER)
+                            # say sth
+                    PREV_COORDINATE = shoulder[1]  
         except BaseException as error:
             print('An exception occurred: {}'.format(error))
             
@@ -95,9 +128,9 @@ with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as 
             TIME_ELAPSED =(datetime.now() - startTime).total_seconds()
         
         circle(str(COUNTER),CENTER1,HEADER1)
-        circle(STAGE,CENTER2,HEADER2)
+        circle(STATE,CENTER2,HEADER2)
         circle(sec_to_min(seconds=TIME_ELAPSED),CENTER3,HEADER3)
-        
+        circle(str(TOTAL_COUNTER),CENTER4,HEADER4)
 
         # Detections
         mp_drawing.draw_landmarks(image, results.pose_landmarks, mp_pose.POSE_CONNECTIONS,
@@ -107,13 +140,7 @@ with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as 
         cv2.imshow('Skipping Rope', image)
         cv2.imshow('Camera', frame)
         if cv2.waitKey(10) & 0xFF == ord('q'):
-            try:
-                info = [datetime.now().strftime("%Y/%m/%d %H:%M:%S"),COUNTER,round(TIME_ELAPSED),round(COUNTER/(TIME_ELAPSED/60))]
-                with open('tracking-progress.csv', mode='a',newline='') as f:
-                    writer = csv.writer(f)
-                    writer.writerow(info)
-            except:
-                pass
+            
             break
 
     cap.release()
