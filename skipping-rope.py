@@ -21,6 +21,9 @@ def circle(text,center,header):
     cv2.putText(image, text, text_origin, 
                     TEXT_FACE, TEXT_SCALE, (0,0,0), TEXT_THICKNESS, cv2.LINE_AA)
 
+def counter_to_txt(Counter):
+    with open('counter.txt', 'w') as f:
+        f.write(str(Counter))
 #Initialization
 COUNTER = 0
 STAGE = "down"
@@ -39,11 +42,11 @@ HEADER3 = [(216,30),"Duration"]
 TEXT_SCALE = 1
 TEXT_FACE = cv2.FONT_HERSHEY_DUPLEX
 TEXT_THICKNESS = 1
-
 ## Setup mediapipe instance
 mp_drawing = mp.solutions.drawing_utils
 mp_pose = mp.solutions.pose
 cap = cv2.VideoCapture(1, cv2.CAP_DSHOW)
+
 with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
     while cap.isOpened():
         ret, frame = cap.read()
@@ -73,13 +76,15 @@ with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as 
                 # Skipping rope Counter Logic   
                 if shoulder[1]< PREV_COORDINATE-DIFF and STAGE == "down":
                     STAGE = "up"
-                    #print("up")          
+                    print("up")          
                 if shoulder[1]> PREV_COORDINATE+DIFF and STAGE == "up":
                     STAGE = "down"
                     COUNTER +=1
-                    #print("down")
-                    #if counter % 100 == 0:
-                    #    print("say sth")   
+                    print("down")
+                    if COUNTER % 10 == 0:
+                        #write Counter to txt
+                        counter_to_txt(COUNTER)
+                        # say sth
                 PREV_COORDINATE = shoulder[1]  
         except BaseException as error:
             print('An exception occurred: {}'.format(error))
@@ -92,6 +97,7 @@ with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as 
         circle(str(COUNTER),CENTER1,HEADER1)
         circle(STAGE,CENTER2,HEADER2)
         circle(sec_to_min(seconds=TIME_ELAPSED),CENTER3,HEADER3)
+        
 
         # Detections
         mp_drawing.draw_landmarks(image, results.pose_landmarks, mp_pose.POSE_CONNECTIONS,
@@ -112,3 +118,4 @@ with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as 
 
     cap.release()
     cv2.destroyAllWindows()
+    counter_to_txt(0)
