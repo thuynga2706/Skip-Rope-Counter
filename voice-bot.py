@@ -15,8 +15,14 @@ def speak():
         if line_[0] != prev_value and line_[0] == "START":
             engine.say("Let's start")
             engine.runAndWait()
+        elif line_[0] != prev_value and line_[0] == "Pause":
+            engine.say("You paused the exercise")
+            engine.runAndWait()
         elif line_[0] != prev_value and line_[0] == "FINISH":
-            engine.say("Congratulations, you are fabulous!")
+            engine.say("Congratulations, you finished the exercise for today.")
+            engine.runAndWait()
+        elif line_[0] != prev_value and line_[0] == "CONTINUE":
+            engine.say("You continue the exercise")
             engine.runAndWait()
         elif line_[0] != prev_value and line_[0] != "0":
             engine.say("You skipped" + line_[0]+ "times")

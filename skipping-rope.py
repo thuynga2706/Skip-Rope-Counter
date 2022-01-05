@@ -24,6 +24,39 @@ def circle(text,center,header):
 def counter_to_txt(Counter):
     with open('counter.txt', 'w') as f:
         f.write(str(Counter))
+
+def write_to_tracking_progress():
+    try:
+        info = [datetime.now().strftime("%Y/%m/%d %H:%M:%S"),COUNTER,round(TIME_ELAPSED),round(COUNTER/(TIME_ELAPSED/60))]
+        with open('tracking-progress.csv', mode='a',newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(info)
+    except:
+        pass
+
+def right_hand_up():
+    global START_LIST_RIGHT
+    right_hand_y = landmarks[mp_pose.PoseLandmark.RIGHT_WRIST.value].y
+    right_eye_y = landmarks[mp_pose.PoseLandmark.RIGHT_EYE.value].y
+    START_LIST_RIGHT.append(right_hand_y-right_eye_y)
+    if right_hand_y-right_eye_y <0: #len(START_LIST_RIGHT)>10 and all(i < 0 for i in START_LIST_RIGHT[-10:]):
+        START_LIST_RIGHT.clear()
+        return True
+    else:
+        #START_LIST_RIGHT = START_LIST_RIGHT[-30:]
+        return False
+def left_hand_up():
+    global START_LIST_LEFT
+    left_hand_y = landmarks[mp_pose.PoseLandmark.LEFT_WRIST.value].y
+    left_eye_y = landmarks[mp_pose.PoseLandmark.LEFT_EYE.value].y
+    START_LIST_LEFT.append(left_hand_y-left_eye_y)
+    if left_hand_y-left_eye_y <0: #len(START_LIST_LEFT)>10 and all(i < 0 for i in START_LIST_LEFT[-10:]):
+        START_LIST_LEFT.clear()
+        return True
+    else: 
+        #START_LIST_LEFT = START_LIST_LEFT[-30:]
+        return False
+
 #Initialization
 COUNTER = 0
 TOTAL_COUNTER = 0
@@ -31,7 +64,10 @@ STATE = "Rest"
 TIME_ELAPSED = 0
 PREV_COORDINATE=0
 DIFF = 0.02
-START_LIST = []
+START_LIST_RIGHT = []
+START_LIST_LEFT = []
+RIGHT_LIST = []
+LEFT_LIST = []
 #Circles & Texts
 CIRCLE_COLOR = (189, 158, 255)#I love pink, especially pastel pink
 CENTER1 = (50, 50) #Counter
@@ -73,34 +109,27 @@ with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as 
             # Get coordinates of left shoulder, it can be any point on body
             shoulder = [landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x,landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
             visibility = landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].visibility
-
-            if STATE == "Rest" or STATE == "Finish": # User hasn't started the exercise
-                COUNTER = 0
-                right_hand_y = landmarks[mp_pose.PoseLandmark.RIGHT_WRIST.value].y
-                right_eye_y = landmarks[mp_pose.PoseLandmark.RIGHT_EYE.value].y
-                START_LIST.append(right_hand_y-right_eye_y)
-                if len(START_LIST)>50 and all(i < 0 for i in START_LIST[-40:]):
-                    STATE = "down"
-                    START_LIST.clear()
-                    counter_to_txt("START")
-
-            if STATE == "up" or STATE == "down" :
-                left_hand_y = landmarks[mp_pose.PoseLandmark.LEFT_WRIST.value].y
-                left_eye_y = landmarks[mp_pose.PoseLandmark.LEFT_EYE.value].y
-                START_LIST.append(left_hand_y-left_eye_y)
-                if len(START_LIST)>50 and all(i < 0 for i in START_LIST[-40:]):
-                    STATE = "Finish"
-                    START_LIST.clear()
-                    counter_to_txt("FINISH")
-                    try:
-                        info = [datetime.now().strftime("%Y/%m/%d %H:%M:%S"),COUNTER,round(TIME_ELAPSED),round(COUNTER/(TIME_ELAPSED/60))]
-                        with open('tracking-progress.csv', mode='a',newline='') as f:
-                            writer = csv.writer(f)
-                            writer.writerow(info)
-                    except:
-                        pass
-
-                if visibility>0.6:
+            RIGHT_LIST.append(right_hand_up())
+            LEFT_LIST.append(left_hand_up())
+            Righthandup = all(i==True for i in RIGHT_LIST[-10:])
+            Lefthandup = all(i==True for i in LEFT_LIST[-10:])
+            if Righthandup and Lefthandup: #or (cv2.waitKey(10) & 0xFF == ord('q')):
+                counter_to_txt("FINISH")
+                break
+            elif STATE == "Rest" and Righthandup and not Lefthandup : # User hasn't started the exercise
+                COUNTER = 0 #Start counting
+                STATE = "down"           
+                counter_to_txt("START")
+            elif STATE == "Pause" and Righthandup and not Lefthandup:
+                COUNTER = 0 #Start counting
+                STATE = "down"           
+                counter_to_txt("CONTINUE")
+            elif STATE == "up" or STATE == "down":
+                if Lefthandup and not Righthandup:
+                    STATE = "Pause"        
+                    counter_to_txt("Pause")
+                    write_to_tracking_progress()
+                elif visibility>0.6:
                     # Visualize
                     cv2.putText(image, str(round(shoulder[1],3)), 
                                     tuple(np.multiply(shoulder, [640, 480]).astype(int)), 
@@ -120,8 +149,8 @@ with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as 
                             # say sth
                     PREV_COORDINATE = shoulder[1]  
         except BaseException as error:
-            print('An exception occurred: {}'.format(error))
-            
+            #print('An exception occurred: {}'.format(error))
+            pass
         if  COUNTER == 0:
             startTime = datetime.now()
         else:
@@ -140,7 +169,6 @@ with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as 
         cv2.imshow('Skipping Rope', image)
         cv2.imshow('Camera', frame)
         if cv2.waitKey(10) & 0xFF == ord('q'):
-            
             break
 
     cap.release()
